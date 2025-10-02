@@ -6,6 +6,60 @@ from manim import *
 import numpy as np
 
 
+# ============================================================================
+# Shared
+# ============================================================================
+
+def lennard_jones_potential(r, epsilon=1.0, sigma=1.0):
+    """
+    Calculate Lennard-Jones potential energy.
+    
+    U(r) = 4ε[(σ/r)^12 - (σ/r)^6]
+    
+    Args:
+        r: Distance between particles (scalar or array)
+        epsilon: Depth of potential well (default: 1.0)
+        sigma: Distance at which potential is zero (default: 1.0)
+    
+    Returns:
+        Potential energy at distance r
+    """
+    if np.isscalar(r):
+        if r < 0.01:
+            return 2.0  # Return large positive value to avoid singularity
+    else:
+        r = np.maximum(r, 0.01)  # Clamp array values
+    
+    return 4 * epsilon * ((sigma / r)**12 - (sigma / r)**6)
+
+def lennard_jones_force(r_vec, epsilon=1.0, sigma=1.0):
+    """
+    Calculate Lennard-Jones force between two particles.
+    
+    F = 24ε[(2(σ/r)^13 - (σ/r)^7)] * r_hat / r
+    
+    Args:
+        r_vec: Vector from particle i to particle j (2D numpy array)
+        epsilon: Depth of potential well (default: 1.0)
+        sigma: Distance at which potential is zero (default: 1.0)
+    
+    Returns:
+        Force vector on particle i due to particle j
+    """
+    r = np.linalg.norm(r_vec)
+    if r < 0.01:  # Avoid division by zero
+        return np.zeros(2)
+    
+    # F = 24 * epsilon * (2 * (sigma/r)^13 - (sigma/r)^7) * r_hat / r
+    force_magnitude = 24 * epsilon * (2 * (sigma / r)**13 - (sigma / r)**7) / r
+    force = force_magnitude * r_vec / r
+    return force
+
+
+# ============================================================================
+# Scenes
+# ============================================================================
+
 class MolecularDynamics(Scene):
     def construct(self):
         # Simulation parameters
@@ -78,17 +132,6 @@ class MolecularDynamics(Scene):
         self.wait(0.5)
         
         # Run molecular dynamics simulation
-        def lennard_jones_force(r_vec):
-            """Calculate LJ force between two particles"""
-            r = np.linalg.norm(r_vec)
-            if r < 0.01:  # avoid division by zero
-                return np.zeros(2)
-            
-            # F = 24 * epsilon * (2 * (sigma/r)^13 - (sigma/r)^7) * r_hat / r
-            force_magnitude = 24 * epsilon * (2 * (sigma / r)**13 - (sigma / r)**7) / r
-            force = force_magnitude * r_vec / r
-            return force
-        
         def update_particles(mob, dt_val):
             """Update particle positions using velocity Verlet integration"""
             nonlocal positions, velocities
@@ -122,7 +165,7 @@ class MolecularDynamics(Scene):
             for i in range(n_particles):
                 for j in range(i + 1, n_particles):
                     r_vec = positions[j] - positions[i]
-                    force = lennard_jones_force(r_vec)
+                    force = lennard_jones_force(r_vec, epsilon, sigma)
                     forces[i] += force
                     forces[j] -= force
             
@@ -148,7 +191,6 @@ class MolecularDynamics(Scene):
             FadeOut(title),
             FadeOut(subtitle)
         )
-
 
 class MolecularDynamicsWithTrails(Scene):
     """Enhanced version with particle trails to visualize motion"""
@@ -218,14 +260,6 @@ class MolecularDynamicsWithTrails(Scene):
         self.add(boundary, title, particles, trails)
         
         # Simulation functions
-        def lennard_jones_force(r_vec):
-            r = np.linalg.norm(r_vec)
-            if r < 0.01:
-                return np.zeros(2)
-            force_magnitude = 24 * epsilon * (2 * (sigma / r)**13 - (sigma / r)**7) / r
-            force = force_magnitude * r_vec / r
-            return force
-        
         def update_particles(mob, dt_val):
             nonlocal positions, velocities
             
@@ -256,7 +290,7 @@ class MolecularDynamicsWithTrails(Scene):
             for i in range(n_particles):
                 for j in range(i + 1, n_particles):
                     r_vec = positions[j] - positions[i]
-                    force = lennard_jones_force(r_vec)
+                    force = lennard_jones_force(r_vec, epsilon, sigma)
                     forces[i] += force
                     forces[j] -= force
             
@@ -283,7 +317,6 @@ class MolecularDynamicsWithTrails(Scene):
         particles.remove_updater(update_particles)
         trails.remove_updater(update_trails)
 
-
 class LennardJonesPotential(Scene):
     """Visualize the Lennard-Jones potential curve"""
     def construct(self):
@@ -301,19 +334,13 @@ class LennardJonesPotential(Scene):
         x_label = axes.get_x_axis_label(r"r / \sigma", direction=DOWN)
         y_label = axes.get_y_axis_label(r"U / \epsilon", direction=LEFT)
         
-        # Lennard-Jones potential function
-        def lj_potential(r):
-            return 4 * ((1/r)**12 - (1/r)**6)
-        
-        # Plot the potential
+        # Plot the potential using shared function (with default ε=1, σ=1)
         lj_curve = axes.plot(
-            lj_potential,
+            lambda r: lennard_jones_potential(r, epsilon=1.0, sigma=1.0),
             x_range=[0.9, 3],
             color=YELLOW,
             stroke_width=3,
-        )
-        
-        # Annotations
+        )        # Annotations
         title = Text("Lennard-Jones Potential", font_size=36)
         title.to_edge(UP)
         
@@ -326,7 +353,7 @@ class LennardJonesPotential(Scene):
         # Mark special points
         equilibrium_r = 2**(1/6)  # minimum of potential
         equilibrium_point = Dot(
-            axes.c2p(equilibrium_r, lj_potential(equilibrium_r)),
+            axes.c2p(equilibrium_r, lennard_jones_potential(equilibrium_r, epsilon=1.0, sigma=1.0)),
             color=GREEN,
             radius=0.08
         )
@@ -375,32 +402,43 @@ class LennardJonesPotential(Scene):
             *[FadeOut(mob) for mob in self.mobjects]
         )
 
-
 class TwoParticleCollision(Scene):
     """Two particles colliding with live potential energy visualization"""
     def construct(self):
         # Simulation parameters
-        epsilon = 1.0
-        sigma = 1.0
-        dt = 0.03
+        # epsilon = 1.0
+        # sigma = 1.0
+        # dt = 0.03
+
+        # Simulation parameters
+        n_particles = 6
+        dt = 0.05  # time step
+        n_steps = 200  # number of simulation steps
         
+        # Lennard-Jones parameters (in arbitrary units)
+        epsilon = 1.0  # depth of potential well
+        sigma = 0.5    # distance at which potential is zero
+        
+        # Box boundaries (scaled to fit the scene)
+        box_size = 5.0
+        edge_buffer = 0.4  # Keep particles away from edges
+
         # Create two sections: left for particles, right for LJ curve
         v_line = Line(UP * 3.5, DOWN * 3.5, color=WHITE, stroke_width=1)
         
         # Left side: particle collision area
         particle_area_center = LEFT * 3.5
-        boundary_size = 4.0
-        boundary = Square(side_length=boundary_size, color=WHITE, stroke_width=2)
+        boundary = Square(side_length=box_size, color=WHITE, stroke_width=2)
         boundary.move_to(particle_area_center)
         
         # Initialize two particles moving toward each other
         # Particle 1: red, starting left moving right
         particle1_start = np.array([-1.5, 0.0])  # Initial separation of 3.0σ
-        velocity1 = np.array([0.6, 0.0])  # Moving right at 0.6 σ/τ
+        velocity1 = np.array([1, 0.0])  # Moving right
         
         # Particle 2: blue, starting right moving left
         particle2_start = np.array([1.5, 0.0])  # Initial separation of 3.0σ
-        velocity2 = np.array([-0.6, 0.0])  # Moving left at 0.6 σ/τ
+        velocity2 = np.array([-1, 0.0])  # Moving left
         
         # Store as simulation state
         positions = np.array([particle1_start, particle2_start])
@@ -428,15 +466,9 @@ class TwoParticleCollision(Scene):
             tips=False,
         ).move_to(curve_center)
         
-        # LJ potential function
-        def lj_potential(r):
-            if r < 0.01:
-                return 2.0
-            return 4 * ((1/r)**12 - (1/r)**6)
-        
-        # Plot curve
+        # Plot curve using shared function
         lj_curve = axes.plot(
-            lj_potential,
+            lambda r: lennard_jones_potential(r, epsilon, sigma),
             x_range=[0.9, 3],
             color=YELLOW,
             stroke_width=2,
@@ -450,7 +482,7 @@ class TwoParticleCollision(Scene):
         equilibrium_r = 2**(1/6)
         eq_line = DashedLine(
             axes.c2p(equilibrium_r, -1.5),
-            axes.c2p(equilibrium_r, lj_potential(equilibrium_r)),
+            axes.c2p(equilibrium_r, lennard_jones_potential(equilibrium_r, epsilon, sigma)),
             color=GREEN,
             stroke_width=1,
             dash_length=0.05,
@@ -459,16 +491,13 @@ class TwoParticleCollision(Scene):
         # Calculate initial distance
         initial_distance = np.linalg.norm(positions[1] - positions[0]) / sigma
         
-        # Energy tracking dots on the curve - start at initial positions
+        # Energy tracking dot on the curve - start at initial positions
         initial_r_normalized = initial_distance
-        initial_potential = lj_potential(initial_r_normalized)
+        initial_potential = lennard_jones_potential(initial_r_normalized, epsilon, sigma)
         initial_energy_point = axes.c2p(initial_r_normalized, initial_potential)
         
-        energy_dot1 = Dot(color=RED, radius=0.06)
-        energy_dot1.move_to(initial_energy_point + LEFT * 0.08)
-        
-        energy_dot2 = Dot(color=BLUE, radius=0.06)
-        energy_dot2.move_to(initial_energy_point + RIGHT * 0.08)
+        energy_dot = Dot(color=GREEN, radius=0.06)
+        energy_dot.move_to(initial_energy_point + LEFT * 0.08)
         
         # Distance label - show initial distance
         distance_label = MathTex(r"r = ", f"{initial_distance:.2f}", r"\sigma", font_size=28)
@@ -481,7 +510,7 @@ class TwoParticleCollision(Scene):
         energy_title = Text("Potential Energy", font_size=24)
         energy_title.next_to(axes, UP, buff=0.5)
         
-        # Show setup
+        # Show setup (all at once)
         self.play(
             Create(boundary),
             Create(v_line),
@@ -490,9 +519,7 @@ class TwoParticleCollision(Scene):
         self.play(
             GrowFromCenter(particle1),
             GrowFromCenter(particle2),
-        )
-        self.wait(0.3)
-        
+        )        
         self.play(
             Create(axes),
             Write(x_label),
@@ -501,21 +528,12 @@ class TwoParticleCollision(Scene):
         )
         self.play(Create(lj_curve), Create(eq_line))
         self.play(
-            GrowFromCenter(energy_dot1),
-            GrowFromCenter(energy_dot2),
+            GrowFromCenter(energy_dot),
             Write(distance_label),
         )
-        self.wait(0.5)
+        self.wait(0.3)
         
         # Simulation update function
-        def lennard_jones_force(r_vec):
-            r = np.linalg.norm(r_vec)
-            if r < 0.01:
-                return np.zeros(2)
-            force_magnitude = 24 * epsilon * (2 * (sigma / r)**13 - (sigma / r)**7) / r
-            force = force_magnitude * r_vec / r
-            return force
-        
         def update_system(dt_val):
             nonlocal positions, velocities
             
@@ -524,7 +542,7 @@ class TwoParticleCollision(Scene):
             r_distance = np.linalg.norm(r_vec)
             
             # Calculate forces
-            force = lennard_jones_force(r_vec)
+            force = lennard_jones_force(r_vec, epsilon, sigma)
             forces = np.array([force, -force])  # Newton's third law
             
             # Velocity Verlet integration
@@ -536,7 +554,7 @@ class TwoParticleCollision(Scene):
             # Recalculate forces
             r_vec = positions[1] - positions[0]
             r_distance = np.linalg.norm(r_vec)
-            force = lennard_jones_force(r_vec)
+            force = lennard_jones_force(r_vec, epsilon, sigma)
             forces = np.array([force, -force])
             accelerations = forces / masses[:, np.newaxis]
             velocities += 0.5 * accelerations * dt_val
@@ -549,7 +567,7 @@ class TwoParticleCollision(Scene):
             r_normalized = r_distance / sigma
             r_normalized = max(0.9, min(r_normalized, 2.9))  # Clamp to plot range
             
-            potential_energy = lj_potential(r_normalized)
+            potential_energy = lennard_jones_potential(r_normalized, epsilon, sigma)
             potential_energy = max(-1.4, min(potential_energy, 1.9))  # Clamp to plot range
             
             energy_point = axes.c2p(r_normalized, potential_energy)
