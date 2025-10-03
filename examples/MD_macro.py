@@ -14,43 +14,46 @@ class MDMacro(Scene):
         self.play(Write(title))
         self.wait(0.5)
         
-        # Create macroscopic gold bar (rectangular prism in isometric view)
-        bar_width = 4.0
-        bar_height = 2.5
-        bar_depth = 1.5
+        # Create macroscopic gold bar (trapezoidal prism like a gold bar)
+        # Define vertices for a trapezoidal prism
+        # Bottom trapezoid (larger)
+        bottom_front_left = [-2.5, -1.5, 0]
+        bottom_front_right = [2.5, -1.5, 0]
+        bottom_back_left = [-2.0, -1.5, -1]
+        bottom_back_right = [2.0, -1.5, -1]
         
-        def apply_iso(x, y, z):
-            """Apply isometric projection"""
-            iso_x = x - z * 0.6
-            iso_y = y + (x + z) * 0.3
-            return np.array([iso_x, iso_y, 0])
+        # Top trapezoid (smaller)
+        top_front_left = [-2.0, 1.5, 0]
+        top_front_right = [2.0, 1.5, 0]
+        top_back_left = [-1.5, 1.5, -1]
+        top_back_right = [1.5, 1.5, -1]
         
-        # Create vertices of the rectangular prism
-        vertices_3d = [
-            np.array([0, 0, 0]),
-            np.array([bar_width, 0, 0]),
-            np.array([bar_width, bar_height, 0]),
-            np.array([0, bar_height, 0]),
-            np.array([0, 0, bar_depth]),
-            np.array([bar_width, 0, bar_depth]),
-            np.array([bar_width, bar_height, bar_depth]),
-            np.array([0, bar_height, bar_depth]),
+        vertices = [
+            bottom_front_left, bottom_front_right, bottom_back_right, bottom_back_left,  # Bottom face
+            top_front_left, top_front_right, top_back_right, top_back_left  # Top face
         ]
         
-        # Apply isometric projection and center
-        center_3d = np.array([bar_width/2, bar_height/2, bar_depth/2])
-        vertices_2d = [apply_iso(*(v - center_3d)) for v in vertices_3d]
+        # Define faces (each face is a list of vertex indices)
+        faces = [
+            [0, 1, 2, 3],  # Bottom trapezoid
+            [4, 5, 6, 7],  # Top trapezoid
+            [0, 1, 5, 4],  # Front face
+            [1, 2, 6, 5],  # Right face
+            [2, 3, 7, 6],  # Back face
+            [3, 0, 4, 7],  # Left face
+        ]
         
-        # Create faces
-        front_face = Polygon(*[vertices_2d[i] for i in [0, 1, 2, 3]], 
-                            color=GOLD, fill_opacity=0.8, stroke_color=YELLOW, stroke_width=2)
-        right_face = Polygon(*[vertices_2d[i] for i in [1, 5, 6, 2]], 
-                            color=GOLD, fill_opacity=0.6, stroke_color=YELLOW, stroke_width=2)
-        top_face = Polygon(*[vertices_2d[i] for i in [3, 2, 6, 7]], 
-                          color=GOLD, fill_opacity=0.9, stroke_color=YELLOW, stroke_width=2)
+        gold_bar = Polyhedron(
+            vertex_coords=vertices,
+            faces_list=faces,
+            graph_config={"edge_config": {"color": GOLD_D, "stroke_width": 3}}
+        )
+        gold_bar.set_fill(GOLD, opacity=0.7)
+        gold_bar.set_stroke(GOLD_D, width=2)
         
-        gold_bar = VGroup(front_face, right_face, top_face)
-        gold_bar.shift(0.5*DOWN)
+        # Rotate to get an angled view looking down at the gold bar
+        gold_bar.rotate(angle=25*DEGREES, axis=RIGHT)  # Tilt forward
+        gold_bar.rotate(angle=20*DEGREES, axis=UP)     # Rotate slightly for perspective
         
         # Add label
         bar_label = Text("Gold Bar", font_size=28, color=YELLOW, weight=BOLD)
@@ -102,7 +105,7 @@ class MDMacro(Scene):
             color=WHITE,
             stroke_width=4
         )
-        zoom_region.move_to(apply_iso(0.3, 1.0, 0.3))
+        zoom_region.move_to([0.5, 0, 0])
         
         zoom_label = Text("Zoom in...", font_size=20, color=WHITE)
         zoom_label.next_to(zoom_region, RIGHT, buff=0.3)
@@ -200,11 +203,26 @@ class MDMacro(Scene):
         self.wait(0.5)
         
         # Add thermal vibration to atoms
-        np.random.seed(42)
-        vibration_amplitude = 0.08
+        vibration_amplitude = 0.1  # Maximum displacement from equilibrium
         
-        # Store original positions
+        # Store original positions (equilibrium positions)
         original_positions = [atom.get_center().copy() for atom in atoms]
+        
+        # Store static bond positions based on equilibrium positions
+        static_bond_positions = []
+        for i in range(lattice_size):
+            for j in range(lattice_size):
+                idx = i * lattice_size + j
+                
+                # Horizontal bonds
+                if i < lattice_size - 1:
+                    neighbor_idx = (i + 1) * lattice_size + j
+                    static_bond_positions.append((original_positions[idx].copy(), original_positions[neighbor_idx].copy()))
+                
+                # Vertical bonds
+                if j < lattice_size - 1:
+                    neighbor_idx = i * lattice_size + (j + 1)
+                    static_bond_positions.append((original_positions[idx].copy(), original_positions[neighbor_idx].copy()))
         
         # Create velocity vectors for visualization (just a few to avoid clutter)
         show_indices = [6, 8, 12, 16, 18]  # Show vectors for select atoms
@@ -224,61 +242,33 @@ class MDMacro(Scene):
         # Function to update atom positions with thermal motion
         time_tracker = ValueTracker(0)
         
-        def update_atoms(mob):
-            t = time_tracker.get_value()
+        def update_atoms(mob, dt):
             for i, atom in enumerate(mob):
-                # Each atom vibrates with its own phase
-                phase_x = i * 0.7
-                phase_y = i * 1.3
-                
-                offset_x = vibration_amplitude * np.sin(3 * t + phase_x)
-                offset_y = vibration_amplitude * np.sin(3 * t + phase_y)
+                # Random vibration around equilibrium position
+                # Fast but small random displacements
+                offset_x = np.random.uniform(-vibration_amplitude, vibration_amplitude)
+                offset_y = np.random.uniform(-vibration_amplitude, vibration_amplitude)
                 
                 new_pos = original_positions[i] + np.array([offset_x, offset_y, 0])
                 atom.move_to(new_pos)
         
-        def update_bonds(mob):
-            bond_idx = 0
-            for i in range(lattice_size):
-                for j in range(lattice_size):
-                    idx = i * lattice_size + j
-                    
-                    # Horizontal bonds
-                    if i < lattice_size - 1:
-                        neighbor_idx = (i + 1) * lattice_size + j
-                        mob[bond_idx].put_start_and_end_on(
-                            atoms[idx].get_center(),
-                            atoms[neighbor_idx].get_center()
-                        )
-                        bond_idx += 1
-                    
-                    # Vertical bonds
-                    if j < lattice_size - 1:
-                        neighbor_idx = i * lattice_size + (j + 1)
-                        mob[bond_idx].put_start_and_end_on(
-                            atoms[idx].get_center(),
-                            atoms[neighbor_idx].get_center()
-                        )
-                        bond_idx += 1
-        
-        def update_velocity_arrows(mob):
-            t = time_tracker.get_value()
+        def update_velocity_arrows(mob, dt):
             for arrow_idx, atom_idx in enumerate(show_indices):
                 atom = atoms[atom_idx]
                 
-                # Calculate instantaneous velocity direction
-                phase_x = atom_idx * 0.7
-                phase_y = atom_idx * 1.3
+                # Calculate velocity from displacement from equilibrium
+                displacement = atom.get_center() - original_positions[atom_idx]
                 
-                vel_x = vibration_amplitude * 3 * np.cos(3 * t + phase_x)
-                vel_y = vibration_amplitude * 3 * np.cos(3 * t + phase_y)
+                # Random velocity direction for visualization
+                vel_x = np.random.uniform(-1, 1)
+                vel_y = np.random.uniform(-1, 1)
                 
                 velocity = np.array([vel_x, vel_y, 0])
                 speed = np.linalg.norm(velocity)
                 
                 if speed > 0.01:
                     direction = velocity / speed
-                    arrow_length = min(speed * 2, 0.6)
+                    arrow_length = 0.4
                     
                     mob[arrow_idx].put_start_and_end_on(
                         atom.get_center(),
@@ -288,9 +278,8 @@ class MDMacro(Scene):
                 else:
                     mob[arrow_idx].set_opacity(0)
         
-        # Add updaters
+        # Add updaters (bonds stay stationary at equilibrium positions)
         atoms.add_updater(update_atoms)
-        bonds.add_updater(update_bonds)
         
         # Show atoms vibrating
         self.add(velocity_arrows)

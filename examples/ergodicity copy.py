@@ -228,7 +228,6 @@ class PhaseSpace(Scene):
         self.play(Write(explanation), run_time=2)
         self.wait(3)
 
-
 class CongaLine(Scene):
     # -  -  -  -  -  -  -  -  -  -
     # D  1  2  3  4  5  6  7  8  -
@@ -405,8 +404,8 @@ class CongaLine(Scene):
         # Create detector at position D
         detector_pos = grid_to_coord(*detector_D)
         detector = Triangle(color=WHITE, fill_opacity=1)
-        detector.scale(0.3)
-        detector.rotate(PI/2)  # Point right
+        detector.scale(0.2)
+        detector.rotate(3*PI/2)  # Point right
         detector.move_to(detector_pos)
         
         detector_label = Text("Detector", font_size=18, color=WHITE)
@@ -415,41 +414,12 @@ class CongaLine(Scene):
         self.play(Create(detector), Write(detector_label), run_time=1)
         self.wait(0.5)
         
-        # Create color counter display
-        counter_box = Rectangle(width=3.5, height=2.5, color=WHITE, stroke_width=2)
-        counter_box.to_edge(RIGHT).shift(UP * 1.5)
-        
-        counter_title = Text("Color Count", font_size=20)
-        counter_title.next_to(counter_box, UP, buff=0.2)
-        
-        red_count = Integer(0, color=RED, font_size=24)
-        green_count = Integer(0, color=GREEN, font_size=24)
-        blue_count = Integer(0, color=BLUE, font_size=24)
-        
-        red_label = Text("Red: ", font_size=20, color=RED)
-        green_label = Text("Green: ", font_size=20, color=GREEN)
-        blue_label = Text("Blue: ", font_size=20, color=BLUE)
-        
-        red_group = VGroup(red_label, red_count).arrange(RIGHT)
-        green_group = VGroup(green_label, green_count).arrange(RIGHT)
-        blue_group = VGroup(blue_label, blue_count).arrange(RIGHT)
-        
-        counter_display = VGroup(red_group, green_group, blue_group).arrange(DOWN, aligned_edge=LEFT, buff=0.3)
-        counter_display.move_to(counter_box.get_center())
-        
-        self.play(
-            Create(counter_box),
-            Write(counter_title),
-            Write(counter_display),
-            run_time=1
-        )
-        self.wait(0.5)
+        # Animate large loop: circles move through their positions
         
                 # Animate large loop: circles move through their positions
         color_counts = {RED: 0, GREEN: 0, BLUE: 0}
-        step_time = 0.15
         
-        # Add updater for lines
+        # Add updater for lines to follow circles
         def update_large_lines(mob):
             for i in range(len(large_loop_order)):
                 num1 = large_loop_order[i]
@@ -461,57 +431,77 @@ class CongaLine(Scene):
         
         large_loop_lines.add_updater(update_large_lines)
         
-        # Create a mapping of which circle is currently at which position
-        # Initially, circle N is at position N
-        current_circle_at_position = {pos: pos for pos in large_loop_order}
+        # Create a smooth path for each circle to follow
+        # Each circle follows the loop path continuously
+        total_time = 12  # Total time for one complete loop
+        time_tracker = ValueTracker(0)
         
-        # Store the physical positions (coordinates) for each position number
-        position_coords = {num: circle_positions[num].copy() for num in large_loop_order}
+        # Store original positions of all circles
+        original_positions = {num: circle_positions[num].copy() for num in large_loop_order}
         
-        for step in range(len(large_loop_order)):
-            # Circle at position 1 (the detector position) passes detector
-            circle_at_detector = current_circle_at_position[1]
-            color = circle_colors[circle_at_detector]
-            color_counts[color] += 1
-            
-            # All circles move to next position in the loop
-            animations = []
-            new_circle_at_position = {}
-            
-            for i in range(len(large_loop_order)):
-                current_pos_num = large_loop_order[i]
-                next_pos_num = large_loop_order[(i + 1) % len(large_loop_order)]
-                
-                # Which circle is currently at this position?
-                circle_num = current_circle_at_position[current_pos_num]
-                
-                # Move this circle to the next position's coordinates
-                next_coord = position_coords[next_pos_num]
-                
-                # Update where this circle will be after the move
-                new_circle_at_position[next_pos_num] = circle_num
-                
-                if circle_num == circle_at_detector:
-                    animations.append(circles[circle_num].animate.move_to(next_coord).set_stroke(width=4, color=WHITE))
-                else:
-                    animations.append(circles[circle_num].animate.move_to(next_coord))
-            
-            # Update the mapping
-            current_circle_at_position = new_circle_at_position
-            
-            self.play(*animations, run_time=step_time)
-            
-            # Reset stroke
-            if step < len(large_loop_order) - 1:
-                circles[circle_at_detector].set_stroke(width=2)
-            
-            # Update counters periodically
-            if (step + 1) % 10 == 0 or step == len(large_loop_order) - 1:
-                red_count.set_value(color_counts[RED])
-                green_count.set_value(color_counts[GREEN])
-                blue_count.set_value(color_counts[BLUE])
+        # Create list of all position coordinates in order
+        path_positions = [original_positions[num] for num in large_loop_order]
         
+        # Track which circles we've counted
+        circles_counted = set()
+        
+        # Highlight circle 1 throughout, used 4 on last animation, need it bigger
+        circles[1].set_stroke(width=10, color=YELLOW)
+        
+        def update_circles(mob, dt):
+            t = time_tracker.get_value()
+            total_positions = len(large_loop_order)
+            
+            for i, circle_num in enumerate(large_loop_order):
+                # Calculate where this circle should be along the path
+                # Each circle starts at position i and moves forward
+                progress = (t + i) % total_positions
+                
+                # Get the two positions to interpolate between
+                pos_index = int(progress)
+                next_pos_index = (pos_index + 1) % total_positions
+                alpha = progress - pos_index
+                
+                # Interpolate between positions
+                current_pos = path_positions[pos_index]
+                next_pos = path_positions[next_pos_index]
+                interpolated_pos = current_pos * (1 - alpha) + next_pos * alpha
+                
+                circles[circle_num].move_to(interpolated_pos)
+                
+                # Check if this circle is currently at position 1 (detector)
+                # Position 1 is index 0 in large_loop_order
+                circle_at_detector_progress = t % total_positions
+                if 0 <= circle_at_detector_progress < 1 and i == 0:
+                    # Circle that started at position matching current time step
+                    shifted_i = int(t) % total_positions
+                    counting_circle = large_loop_order[shifted_i]
+                    if counting_circle not in circles_counted:
+                        circles_counted.add(counting_circle)
+                        color = circle_colors[counting_circle]
+                        color_counts[color] += 1
+                        
+                        # Change detector color to match last circle that passed ... this doesn't seem to be working correctly
+                        # detector.set_color(color)
+        
+        # Add updater to all circles
+        for circle_num in large_loop_order:
+            circles[circle_num].add_updater(update_circles)
+        
+        # Animate the time tracker for one complete loop
+        self.play(
+            time_tracker.animate.set_value(len(large_loop_order)),
+            run_time=total_time,
+            rate_func=linear
+        )
+        
+        # Remove updaters
+        for circle_num in large_loop_order:
+            circles[circle_num].remove_updater(update_circles)
         large_loop_lines.remove_updater(update_large_lines)
+        
+        # Reset circle 1 stroke
+        circles[1].set_stroke(width=2)
         self.wait(1)
         
         # Calculate average color for large loop
@@ -523,12 +513,12 @@ class CongaLine(Scene):
         ]
         
         # Create average color circle
-        avg_circle = Circle(radius=0.4, fill_opacity=0.8, stroke_width=3, stroke_color=WHITE)
+        avg_circle = Circle(radius=0.6, fill_opacity=0.8, stroke_width=3, stroke_color=WHITE)
         avg_circle.set_color(rgb_to_color(avg_color))
-        avg_circle.next_to(counter_box, DOWN, buff=0.5)
+        avg_circle.to_edge(RIGHT).shift(UP * 1.5)
         
-        avg_label = Text("Average Color", font_size=18)
-        avg_label.next_to(avg_circle, DOWN, buff=0.2)
+        avg_label = Text("Average Color\n(Large Loop)", font_size=18)
+        avg_label.next_to(avg_circle, DOWN, buff=0.3)
         
         self.play(Create(avg_circle), Write(avg_label), run_time=1.5)
         self.wait(2)
@@ -538,12 +528,7 @@ class CongaLine(Scene):
         detector_star_pos = grid_to_coord(*detector_D_star)
         
         self.play(
-            FadeOut(avg_circle),
-            FadeOut(avg_label),
-            red_count.animate.set_value(0),
-            green_count.animate.set_value(0),
-            blue_count.animate.set_value(0),
-            detector.animate.move_to(detector_star_pos).rotate(PI),  # Face left
+            detector.animate.move_to(detector_star_pos).rotate(PI).set_color(WHITE),  # Face left and reset color
             detector_label.animate.next_to(detector_star_pos + RIGHT * 0.5, RIGHT, buff=0.2),
             run_time=2
         )
@@ -564,58 +549,74 @@ class CongaLine(Scene):
         
         small_loop_lines.add_updater(update_small_lines)
         
-        # Create a mapping of which circle is currently at which position for small loop
-        current_circle_at_position_small = {pos: pos for pos in small_loop_order}
+        # Create smooth animation for small loop
+        total_time_small = 3  # Faster since fewer circles
+        time_tracker_small = ValueTracker(0)
         
-        # Store the physical positions for small loop
-        position_coords_small = {num: circle_positions[num].copy() for num in small_loop_order}
+        # Store original positions
+        original_positions_small = {num: circle_positions[num].copy() for num in small_loop_order}
         
-        # Position 62 is where the detector observes (right before D*)
-        detector_observation_pos = 62
+        # Create list of position coordinates in order
+        path_positions_small = [original_positions_small[num] for num in small_loop_order]
         
-        for step in range(len(small_loop_order)):
-            # Circle at position 62 passes detector
-            circle_at_detector = current_circle_at_position_small[detector_observation_pos]
-            color = circle_colors[circle_at_detector]
-            color_counts_small[color] += 1
-            
-            # All circles move to next position
-            animations = []
-            new_circle_at_position_small = {}
-            
-            for i in range(len(small_loop_order)):
-                current_pos_num = small_loop_order[i]
-                next_pos_num = small_loop_order[(i + 1) % len(small_loop_order)]
-                
-                # Which circle is currently at this position?
-                circle_num = current_circle_at_position_small[current_pos_num]
-                
-                # Move this circle to the next position's coordinates
-                next_coord = position_coords_small[next_pos_num]
-                
-                # Update where this circle will be after the move
-                new_circle_at_position_small[next_pos_num] = circle_num
-                
-                if circle_num == circle_at_detector:
-                    animations.append(circles[circle_num].animate.move_to(next_coord).set_stroke(width=4, color=WHITE))
-                else:
-                    animations.append(circles[circle_num].animate.move_to(next_coord))
-            
-            # Update the mapping
-            current_circle_at_position_small = new_circle_at_position_small
-            
-            self.play(*animations, run_time=0.3)
-            
-            # Reset stroke
-            if step < len(small_loop_order) - 1:
-                circles[circle_at_detector].set_stroke(width=2)
+        # Track counted circles
+        circles_counted_small = set()
         
+        # Find which index in small_loop_order is position 62
+        detector_pos_index = small_loop_order.index(62)
+        
+        # Highlight circle 59 throughout
+        circles[59].set_stroke(width=4, color=YELLOW)
+        
+        def update_small_circles(mob, dt):
+            t = time_tracker_small.get_value()
+            total_positions = len(small_loop_order)
+            
+            for i, circle_num in enumerate(small_loop_order):
+                # Calculate position along path
+                progress = (t + i) % total_positions
+                
+                # Interpolate between positions
+                pos_index = int(progress)
+                next_pos_index = (pos_index + 1) % total_positions
+                alpha = progress - pos_index
+                
+                current_pos = path_positions_small[pos_index]
+                next_pos = path_positions_small[next_pos_index]
+                interpolated_pos = current_pos * (1 - alpha) + next_pos * alpha
+                
+                circles[circle_num].move_to(interpolated_pos)
+                
+                # Check if circle is at detector position (62)
+                if i == detector_pos_index and 0 <= (t % total_positions) < 1:
+                    shifted_i = int(t) % total_positions
+                    counting_circle = small_loop_order[shifted_i]
+                    if counting_circle not in circles_counted_small:
+                        circles_counted_small.add(counting_circle)
+                        color = circle_colors[counting_circle]
+                        color_counts_small[color] += 1
+                        
+                        # Change detector color to match last circle that passed
+                        detector.set_color(color)
+        
+        # Add updaters
+        for circle_num in small_loop_order:
+            circles[circle_num].add_updater(update_small_circles)
+        
+        # Animate
+        self.play(
+            time_tracker_small.animate.set_value(len(small_loop_order)),
+            run_time=total_time_small,
+            rate_func=linear
+        )
+        
+        # Remove updaters
+        for circle_num in small_loop_order:
+            circles[circle_num].remove_updater(update_small_circles)
         small_loop_lines.remove_updater(update_small_lines)
         
-        # Update final counts
-        red_count.set_value(color_counts_small[RED])
-        green_count.set_value(color_counts_small[GREEN])
-        blue_count.set_value(color_counts_small[BLUE])
+        # Reset circle 59 stroke
+        circles[59].set_stroke(width=2)
         self.wait(1)
         
         # Calculate average color for small loop
@@ -627,12 +628,12 @@ class CongaLine(Scene):
         ]
         
         # Create average color circle for small loop
-        avg_circle_small = Circle(radius=0.4, fill_opacity=0.8, stroke_width=3, stroke_color=WHITE)
+        avg_circle_small = Circle(radius=0.6, fill_opacity=0.8, stroke_width=3, stroke_color=WHITE)
         avg_circle_small.set_color(rgb_to_color(avg_color_small))
-        avg_circle_small.next_to(counter_box, DOWN, buff=0.5)
+        avg_circle_small.to_edge(RIGHT).shift(DOWN * 1.5)
         
-        avg_label_small = Text("Average Color", font_size=18)
-        avg_label_small.next_to(avg_circle_small, DOWN, buff=0.2)
+        avg_label_small = Text("Average Color\n(Small Loop)", font_size=18)
+        avg_label_small.next_to(avg_circle_small, DOWN, buff=0.3)
         
         self.play(Create(avg_circle_small), Write(avg_label_small), run_time=1.5)
         self.wait(2)

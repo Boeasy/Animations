@@ -192,10 +192,11 @@ class CongaLine(Scene):
         self.play(Create(detector), Write(detector_label), run_time=1)
         self.wait(0.5)
         
-        # Animate large loop: circles move through their positions
-        
-                # Animate large loop: circles move through their positions
+        # Pre-calculate color counts for large loop
         color_counts = {RED: 0, GREEN: 0, BLUE: 0}
+        for circle_num in large_loop_order:
+            color = circle_colors[circle_num]
+            color_counts[color] += 1
         
         # Add updater for lines to follow circles
         def update_large_lines(mob):
@@ -220,9 +221,6 @@ class CongaLine(Scene):
         # Create list of all position coordinates in order
         path_positions = [original_positions[num] for num in large_loop_order]
         
-        # Track which circles we've counted
-        circles_counted = set()
-        
         # Highlight circle 1 throughout, used 4 on last animation, need it bigger
         circles[1].set_stroke(width=10, color=YELLOW)
         
@@ -246,21 +244,6 @@ class CongaLine(Scene):
                 interpolated_pos = current_pos * (1 - alpha) + next_pos * alpha
                 
                 circles[circle_num].move_to(interpolated_pos)
-                
-                # Check if this circle is currently at position 1 (detector)
-                # Position 1 is index 0 in large_loop_order
-                circle_at_detector_progress = t % total_positions
-                if 0 <= circle_at_detector_progress < 1 and i == 0:
-                    # Circle that started at position matching current time step
-                    shifted_i = int(t) % total_positions
-                    counting_circle = large_loop_order[shifted_i]
-                    if counting_circle not in circles_counted:
-                        circles_counted.add(counting_circle)
-                        color = circle_colors[counting_circle]
-                        color_counts[color] += 1
-                        
-                        # Change detector color to match last circle that passed ... this doesn't seem to be working correctly
-                        # detector.set_color(color)
         
         # Add updater to all circles
         for circle_num in large_loop_order:
@@ -306,14 +289,17 @@ class CongaLine(Scene):
         detector_star_pos = grid_to_coord(*detector_D_star)
         
         self.play(
-            detector.animate.move_to(detector_star_pos).rotate(PI).set_color(WHITE),  # Face left and reset color
+            detector.animate.move_to(detector_star_pos).rotate(PI),  # Face left
             detector_label.animate.next_to(detector_star_pos + RIGHT * 0.5, RIGHT, buff=0.2),
             run_time=2
         )
         self.wait(0.5)
         
-        # Animate small loop
+        # Pre-calculate color counts for small loop
         color_counts_small = {RED: 0, GREEN: 0, BLUE: 0}
+        for circle_num in small_loop_order:
+            color = circle_colors[circle_num]
+            color_counts_small[color] += 1
         
         # Add updater for small loop lines
         def update_small_lines(mob):
@@ -337,14 +323,8 @@ class CongaLine(Scene):
         # Create list of position coordinates in order
         path_positions_small = [original_positions_small[num] for num in small_loop_order]
         
-        # Track counted circles
-        circles_counted_small = set()
-        
-        # Find which index in small_loop_order is position 62
-        detector_pos_index = small_loop_order.index(62)
-        
-        # Highlight circle 59 throughout
-        circles[59].set_stroke(width=4, color=YELLOW)
+        # Highlight circle 62 throughout
+        circles[62].set_stroke(width=10, color=YELLOW)
         
         def update_small_circles(mob, dt):
             t = time_tracker_small.get_value()
@@ -364,18 +344,6 @@ class CongaLine(Scene):
                 interpolated_pos = current_pos * (1 - alpha) + next_pos * alpha
                 
                 circles[circle_num].move_to(interpolated_pos)
-                
-                # Check if circle is at detector position (62)
-                if i == detector_pos_index and 0 <= (t % total_positions) < 1:
-                    shifted_i = int(t) % total_positions
-                    counting_circle = small_loop_order[shifted_i]
-                    if counting_circle not in circles_counted_small:
-                        circles_counted_small.add(counting_circle)
-                        color = circle_colors[counting_circle]
-                        color_counts_small[color] += 1
-                        
-                        # Change detector color to match last circle that passed
-                        detector.set_color(color)
         
         # Add updaters
         for circle_num in small_loop_order:
