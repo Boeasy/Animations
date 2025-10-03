@@ -230,6 +230,26 @@ class PhaseSpace(Scene):
 
 
 class CongaLine(Scene):
+    # -  -  -  -  -  -  -  -  -  -
+    # D  1  2  3  4  5  6  7  8  -
+    # -  58 15 14 13 12 11 10 9  -
+    # -  57 16 17 18 19 20 21 22 -
+    # -  56 29 28 27 26 25 24 23 -
+    # -  55 30 31 32 33 34 35 36 -
+    # -  54 43 42 41 40 39 38 37 -
+    # -  53 44 45 46 47 59 60 61 -
+    # -  52 51 50 49 48 64 63 62 D*
+    # -  -  -  -  -  -  -  -  -  -
+
+    #  Above diagram shows how the grid should be set up. D is the first detector position, D* is the second.
+    # 1-58 are part of the 'large loop' and 59-64 are the 'small loop'
+    # there are vertices between each consecutive circle, ie "1 - 2", and 58 connects to 1, and 64 connects to 59. 
+    # Each circle should be a random color R G B in the large loop
+    # The small loop they will only be R
+    # The animation will be first, the detector triangle is at D and each circle moves to the position of the next consecutive circle, until back to its original position. 
+    # The detector will keep count of the color of each circle by a count, R G or B and then show a circle that is the average color of all of these circles.
+    # It will then do this same process for the small loop with detector at position D*
+    
     def construct(self):
         # Title
         title = Text("Ergodicity: The Conga Line Analogy", font_size=36)
@@ -238,71 +258,127 @@ class CongaLine(Scene):
         self.wait(0.5)
         
         # Parameters
-        grid_size = 8
         circle_radius = 0.15
-        spacing = 0.8
+        spacing = 0.6
         
-        # Define colors
-        colors_list = [RED, BLUE, GREEN]
+        # Define the grid layout based on the diagram
+        # The grid is 10x10, with row 0 and col 0,9 being empty borders
+        # Map from circle number to (row, col) position
+        grid_layout = {}
         
-        # Create 8x8 grid positions
-        grid_positions = []
-        for i in range(grid_size):
-            for j in range(grid_size):
-                x = (i - grid_size/2 + 0.5) * spacing
-                y = (j - grid_size/2 + 0.5) * spacing
-                grid_positions.append(np.array([x, y, 0]))
+        # Row 1: D 1 2 3 4 5 6 7 8 -
+        positions_row1 = [1, 2, 3, 4, 5, 6, 7, 8]
+        for i, num in enumerate(positions_row1):
+            grid_layout[num] = (1, i + 1)
         
-        # Assign random colors
-        np.random.seed(123)
-        circle_colors = [colors_list[np.random.randint(0, 3)] for _ in range(64)]
+        # Row 2: - 58 15 14 13 12 11 10 9 -
+        positions_row2 = [58, 15, 14, 13, 12, 11, 10, 9]
+        for i, num in enumerate(positions_row2):
+            grid_layout[num] = (2, i + 1)
         
-        # Define the large conga line (58 circles) and small loop (6 circles)
-        # Small loop: 6 circles on the outside edge (bottom right area)
-        # Placed outside the grid so observer doesn't need to cross the main grid
-        small_loop_indices = [7, 15, 23, 31, 39, 47]  # Right edge, every 8th
-        large_loop_indices = [i for i in range(64) if i not in small_loop_indices]
+        # Row 3: - 57 16 17 18 19 20 21 22 -
+        positions_row3 = [57, 16, 17, 18, 19, 20, 21, 22]
+        for i, num in enumerate(positions_row3):
+            grid_layout[num] = (3, i + 1)
+        
+        # Row 4: - 56 29 28 27 26 25 24 23 -
+        positions_row4 = [56, 29, 28, 27, 26, 25, 24, 23]
+        for i, num in enumerate(positions_row4):
+            grid_layout[num] = (4, i + 1)
+        
+        # Row 5: - 55 30 31 32 33 34 35 36 -
+        positions_row5 = [55, 30, 31, 32, 33, 34, 35, 36]
+        for i, num in enumerate(positions_row5):
+            grid_layout[num] = (5, i + 1)
+        
+        # Row 6: - 54 43 42 41 40 39 38 37 -
+        positions_row6 = [54, 43, 42, 41, 40, 39, 38, 37]
+        for i, num in enumerate(positions_row6):
+            grid_layout[num] = (6, i + 1)
+        
+        # Row 7: - 53 44 45 46 47 59 60 61 -
+        positions_row7 = [53, 44, 45, 46, 47, 59, 60, 61]
+        for i, num in enumerate(positions_row7):
+            grid_layout[num] = (7, i + 1)
+        
+        # Row 8: - 52 51 50 49 48 64 63 62 -
+        positions_row8 = [52, 51, 50, 49, 48, 64, 63, 62]
+        for i, num in enumerate(positions_row8):
+            grid_layout[num] = (8, i + 1)
+        
+        # Detector positions
+        detector_D = (1, 0)  # Left of position 1
+        detector_D_star = (8, 9)  # Right of position 62
+        
+        # Convert grid positions to coordinates
+        def grid_to_coord(row, col):
+            x = (col - 4.5) * spacing
+            y = (4.5 - row) * spacing
+            return np.array([x, y, 0])
+        
+        # Create position map for all circles
+        circle_positions = {}
+        for num, (row, col) in grid_layout.items():
+            circle_positions[num] = grid_to_coord(row, col)
+        
+        # Define loop order
+        large_loop_order = list(range(1, 59))  # 1 to 58
+        small_loop_order = list(range(59, 65))  # 59 to 64
+        
+        # Assign colors
+        np.random.seed(42)
+        colors_list = [RED, GREEN, BLUE]
+        circle_colors = {}
+        
+        # Large loop: random RGB
+        for num in large_loop_order:
+            circle_colors[num] = colors_list[np.random.randint(0, 3)]
+        
+        # Small loop: all RED
+        for num in small_loop_order:
+            circle_colors[num] = RED
         
         # Create circles
-        circles = VGroup()
-        for i, pos in enumerate(grid_positions):
+        circles = {}
+        for num in range(1, 65):
             circle = Circle(
                 radius=circle_radius,
-                color=circle_colors[i],
+                color=circle_colors[num],
                 fill_opacity=0.8,
                 stroke_width=2,
                 stroke_color=WHITE
             )
-            circle.move_to(pos)
-            circles.add(circle)
+            circle.move_to(circle_positions[num])
+            circles[num] = circle
         
-        # Show all circles
-        self.play(Create(circles), run_time=2)
+        # Create all circle objects
+        all_circles = VGroup(*[circles[i] for i in range(1, 65)])
+        
+        # Show circles
+        self.play(Create(all_circles), run_time=2)
         self.wait(0.5)
         
-        # Create conga line connections for large loop
+        # Create connections for large loop
         large_loop_lines = VGroup()
-        for i in range(len(large_loop_indices)):
-            idx1 = large_loop_indices[i]
-            idx2 = large_loop_indices[(i + 1) % len(large_loop_indices)]
-            
+        for i in range(len(large_loop_order)):
+            num1 = large_loop_order[i]
+            num2 = large_loop_order[(i + 1) % len(large_loop_order)]
             line = Line(
-                circles[idx1].get_center(),
-                circles[idx2].get_center(),
+                circles[num1].get_center(),
+                circles[num2].get_center(),
                 color=YELLOW,
                 stroke_width=3
             )
             large_loop_lines.add(line)
         
-        # Create conga line connections for small loop
+        # Create connections for small loop
         small_loop_lines = VGroup()
-        for i in range(len(small_loop_indices)):
-            idx1 = small_loop_indices[i]
-            idx2 = small_loop_indices[(i + 1) % len(small_loop_indices)]
-            
+        for i in range(len(small_loop_order)):
+            num1 = small_loop_order[i]
+            num2 = small_loop_order[(i + 1) % len(small_loop_order)]
             line = Line(
-                circles[idx1].get_center(),
-                circles[idx2].get_center(),
+                circles[num1].get_center(),
+                circles[num2].get_center(),
                 color=ORANGE,
                 stroke_width=3
             )
@@ -317,56 +393,48 @@ class CongaLine(Scene):
         self.wait(0.5)
         
         # Add labels
-        large_label = Text("Ergodic (58 circles)", font_size=20, color=YELLOW)
-        large_label.to_edge(LEFT).shift(UP)
+        large_label = Text("Ergodic System (58 circles)", font_size=20, color=YELLOW)
+        large_label.to_edge(LEFT).shift(UP * 3)
         
-        small_label = Text("Non-ergodic (6 circles)", font_size=20, color=ORANGE)
+        small_label = Text("Non-ergodic System (6 circles)", font_size=20, color=ORANGE)
         small_label.next_to(large_label, DOWN, aligned_edge=LEFT)
         
-        self.play(
-            Write(large_label),
-            Write(small_label),
-            run_time=1.5
-        )
+        self.play(Write(large_label), Write(small_label), run_time=1.5)
         self.wait(0.5)
         
-        # Place observer at a fixed position to the left of the grid
-        observer_position = np.array([-4, 0, 0])
-        observer = Triangle(color=WHITE, fill_opacity=1)
-        observer.scale(0.3)
-        observer.move_to(observer_position)
-        observer.rotate(PI/2)  # Point to the right
+        # Create detector at position D
+        detector_pos = grid_to_coord(*detector_D)
+        detector = Triangle(color=WHITE, fill_opacity=1)
+        detector.scale(0.3)
+        detector.rotate(PI/2)  # Point right
+        detector.move_to(detector_pos)
         
-        observer_label = Text("Observer", font_size=18, color=WHITE)
-        observer_label.next_to(observer, LEFT, buff=0.2)
+        detector_label = Text("Detector", font_size=18, color=WHITE)
+        detector_label.next_to(detector, LEFT, buff=0.2)
         
-        self.play(
-            Create(observer),
-            Write(observer_label),
-            run_time=1
-        )
+        self.play(Create(detector), Write(detector_label), run_time=1)
         self.wait(0.5)
         
         # Create color counter display
-        counter_box = Rectangle(width=3, height=2, color=WHITE, stroke_width=2)
-        counter_box.to_edge(RIGHT).shift(UP)
+        counter_box = Rectangle(width=3.5, height=2.5, color=WHITE, stroke_width=2)
+        counter_box.to_edge(RIGHT).shift(UP * 1.5)
         
-        counter_title = Text("Color Average", font_size=20)
+        counter_title = Text("Color Count", font_size=20)
         counter_title.next_to(counter_box, UP, buff=0.2)
         
         red_count = Integer(0, color=RED, font_size=24)
-        blue_count = Integer(0, color=BLUE, font_size=24)
         green_count = Integer(0, color=GREEN, font_size=24)
+        blue_count = Integer(0, color=BLUE, font_size=24)
         
         red_label = Text("Red: ", font_size=20, color=RED)
-        blue_label = Text("Blue: ", font_size=20, color=BLUE)
         green_label = Text("Green: ", font_size=20, color=GREEN)
+        blue_label = Text("Blue: ", font_size=20, color=BLUE)
         
         red_group = VGroup(red_label, red_count).arrange(RIGHT)
-        blue_group = VGroup(blue_label, blue_count).arrange(RIGHT)
         green_group = VGroup(green_label, green_count).arrange(RIGHT)
+        blue_group = VGroup(blue_label, blue_count).arrange(RIGHT)
         
-        counter_display = VGroup(red_group, blue_group, green_group).arrange(DOWN, aligned_edge=LEFT, buff=0.2)
+        counter_display = VGroup(red_group, green_group, blue_group).arrange(DOWN, aligned_edge=LEFT, buff=0.3)
         counter_display.move_to(counter_box.get_center())
         
         self.play(
@@ -377,131 +445,205 @@ class CongaLine(Scene):
         )
         self.wait(0.5)
         
-        # Move circles past observer and count colors
-        color_counts = {RED: 0, BLUE: 0, GREEN: 0}
-        visit_time = 0.08
+                # Animate large loop: circles move through their positions
+        color_counts = {RED: 0, GREEN: 0, BLUE: 0}
+        step_time = 0.15
         
-        for i, idx in enumerate(large_loop_indices):
-            circle_color = circle_colors[idx]
-            color_counts[circle_color] += 1
-            
-            # Store original position
-            original_pos = circles[idx].get_center()
-            
-            # Move circle to observer position and back
-            self.play(
-                circles[idx].animate.move_to(observer_position + RIGHT * 0.5).set_stroke(width=4, color=WHITE),
-                run_time=visit_time
-            )
-            
-            # Update counters every 5 visits
-            if (i + 1) % 5 == 0 or i == len(large_loop_indices) - 1:
-                self.play(
-                    red_count.animate.set_value(color_counts[RED]),
-                    blue_count.animate.set_value(color_counts[BLUE]),
-                    green_count.animate.set_value(color_counts[GREEN]),
-                    run_time=0.3
+        # Add updater for lines
+        def update_large_lines(mob):
+            for i in range(len(large_loop_order)):
+                num1 = large_loop_order[i]
+                num2 = large_loop_order[(i + 1) % len(large_loop_order)]
+                mob[i].put_start_and_end_on(
+                    circles[num1].get_center(),
+                    circles[num2].get_center()
                 )
+        
+        large_loop_lines.add_updater(update_large_lines)
+        
+        # Create a mapping of which circle is currently at which position
+        # Initially, circle N is at position N
+        current_circle_at_position = {pos: pos for pos in large_loop_order}
+        
+        # Store the physical positions (coordinates) for each position number
+        position_coords = {num: circle_positions[num].copy() for num in large_loop_order}
+        
+        for step in range(len(large_loop_order)):
+            # Circle at position 1 (the detector position) passes detector
+            circle_at_detector = current_circle_at_position[1]
+            color = circle_colors[circle_at_detector]
+            color_counts[color] += 1
             
-            # Move back to original position
-            self.play(
-                circles[idx].animate.move_to(original_pos).set_stroke(width=2),
-                run_time=visit_time
-            )
+            # All circles move to next position in the loop
+            animations = []
+            new_circle_at_position = {}
+            
+            for i in range(len(large_loop_order)):
+                current_pos_num = large_loop_order[i]
+                next_pos_num = large_loop_order[(i + 1) % len(large_loop_order)]
+                
+                # Which circle is currently at this position?
+                circle_num = current_circle_at_position[current_pos_num]
+                
+                # Move this circle to the next position's coordinates
+                next_coord = position_coords[next_pos_num]
+                
+                # Update where this circle will be after the move
+                new_circle_at_position[next_pos_num] = circle_num
+                
+                if circle_num == circle_at_detector:
+                    animations.append(circles[circle_num].animate.move_to(next_coord).set_stroke(width=4, color=WHITE))
+                else:
+                    animations.append(circles[circle_num].animate.move_to(next_coord))
+            
+            # Update the mapping
+            current_circle_at_position = new_circle_at_position
+            
+            self.play(*animations, run_time=step_time)
+            
+            # Reset stroke
+            if step < len(large_loop_order) - 1:
+                circles[circle_at_detector].set_stroke(width=2)
+            
+            # Update counters periodically
+            if (step + 1) % 10 == 0 or step == len(large_loop_order) - 1:
+                red_count.set_value(color_counts[RED])
+                green_count.set_value(color_counts[GREEN])
+                blue_count.set_value(color_counts[BLUE])
         
+        large_loop_lines.remove_updater(update_large_lines)
         self.wait(1)
         
-        # Calculate percentages
-        total = len(large_loop_indices)
-        red_pct = color_counts[RED] / total * 100
-        blue_pct = color_counts[BLUE] / total * 100
-        green_pct = color_counts[GREEN] / total * 100
+        # Calculate average color for large loop
+        total = len(large_loop_order)
+        avg_color = [
+            color_counts[RED] / total,
+            color_counts[GREEN] / total,
+            color_counts[BLUE] / total
+        ]
         
-        result_large = VGroup(
-            Text(f"Red: {red_pct:.1f}%", font_size=18, color=RED),
-            Text(f"Blue: {blue_pct:.1f}%", font_size=18, color=BLUE),
-            Text(f"Green: {green_pct:.1f}%", font_size=18, color=GREEN)
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.1)
-        result_large.next_to(counter_box, DOWN, buff=0.3)
+        # Create average color circle
+        avg_circle = Circle(radius=0.4, fill_opacity=0.8, stroke_width=3, stroke_color=WHITE)
+        avg_circle.set_color(rgb_to_color(avg_color))
+        avg_circle.next_to(counter_box, DOWN, buff=0.5)
         
-        self.play(Write(result_large), run_time=1.5)
-        self.wait(1)
+        avg_label = Text("Average Color", font_size=18)
+        avg_label.next_to(avg_circle, DOWN, buff=0.2)
         
-        # Reset stroke on all circles
-        self.play(
-            *[circles[i].animate.set_stroke(width=2) for i in large_loop_indices],
-            run_time=0.5
-        )
+        self.play(Create(avg_circle), Write(avg_label), run_time=1.5)
+        self.wait(2)
         
-        # Now observer looks at small loop (on the right edge)
-        # Move observer to right side to observe the small loop
-        small_observer_position = np.array([4, 0, 0])
+        # Transition to small loop
+        # Move detector to D* position
+        detector_star_pos = grid_to_coord(*detector_D_star)
         
         self.play(
-            FadeOut(result_large),
+            FadeOut(avg_circle),
+            FadeOut(avg_label),
             red_count.animate.set_value(0),
-            blue_count.animate.set_value(0),
             green_count.animate.set_value(0),
-            observer.animate.move_to(small_observer_position).rotate(PI),  # Face left
-            observer_label.animate.next_to(small_observer_position + RIGHT * 0.5, RIGHT, buff=0.2),
-            run_time=1.5
+            blue_count.animate.set_value(0),
+            detector.animate.move_to(detector_star_pos).rotate(PI),  # Face left
+            detector_label.animate.next_to(detector_star_pos + RIGHT * 0.5, RIGHT, buff=0.2),
+            run_time=2
         )
         self.wait(0.5)
         
-        # Move circles from small loop past observer and count
-        color_counts_small = {RED: 0, BLUE: 0, GREEN: 0}
+        # Animate small loop
+        color_counts_small = {RED: 0, GREEN: 0, BLUE: 0}
         
-        for i, idx in enumerate(small_loop_indices):
-            circle_color = circle_colors[idx]
-            color_counts_small[circle_color] += 1
-            
-            # Store original position
-            original_pos = circles[idx].get_center()
-            
-            # Move circle to observer position
-            self.play(
-                circles[idx].animate.move_to(small_observer_position + LEFT * 0.5).set_stroke(width=4, color=WHITE),
-                run_time=0.3
-            )
-            
-            # Move back to original position
-            self.play(
-                circles[idx].animate.move_to(original_pos).set_stroke(width=2),
-                run_time=0.3
-            )
+        # Add updater for small loop lines
+        def update_small_lines(mob):
+            for i in range(len(small_loop_order)):
+                num1 = small_loop_order[i]
+                num2 = small_loop_order[(i + 1) % len(small_loop_order)]
+                mob[i].put_start_and_end_on(
+                    circles[num1].get_center(),
+                    circles[num2].get_center()
+                )
         
-        # Update counters
-        self.play(
-            red_count.animate.set_value(color_counts_small[RED]),
-            blue_count.animate.set_value(color_counts_small[BLUE]),
-            green_count.animate.set_value(color_counts_small[GREEN]),
-            run_time=0.8
-        )
+        small_loop_lines.add_updater(update_small_lines)
+        
+        # Create a mapping of which circle is currently at which position for small loop
+        current_circle_at_position_small = {pos: pos for pos in small_loop_order}
+        
+        # Store the physical positions for small loop
+        position_coords_small = {num: circle_positions[num].copy() for num in small_loop_order}
+        
+        # Position 62 is where the detector observes (right before D*)
+        detector_observation_pos = 62
+        
+        for step in range(len(small_loop_order)):
+            # Circle at position 62 passes detector
+            circle_at_detector = current_circle_at_position_small[detector_observation_pos]
+            color = circle_colors[circle_at_detector]
+            color_counts_small[color] += 1
+            
+            # All circles move to next position
+            animations = []
+            new_circle_at_position_small = {}
+            
+            for i in range(len(small_loop_order)):
+                current_pos_num = small_loop_order[i]
+                next_pos_num = small_loop_order[(i + 1) % len(small_loop_order)]
+                
+                # Which circle is currently at this position?
+                circle_num = current_circle_at_position_small[current_pos_num]
+                
+                # Move this circle to the next position's coordinates
+                next_coord = position_coords_small[next_pos_num]
+                
+                # Update where this circle will be after the move
+                new_circle_at_position_small[next_pos_num] = circle_num
+                
+                if circle_num == circle_at_detector:
+                    animations.append(circles[circle_num].animate.move_to(next_coord).set_stroke(width=4, color=WHITE))
+                else:
+                    animations.append(circles[circle_num].animate.move_to(next_coord))
+            
+            # Update the mapping
+            current_circle_at_position_small = new_circle_at_position_small
+            
+            self.play(*animations, run_time=0.3)
+            
+            # Reset stroke
+            if step < len(small_loop_order) - 1:
+                circles[circle_at_detector].set_stroke(width=2)
+        
+        small_loop_lines.remove_updater(update_small_lines)
+        
+        # Update final counts
+        red_count.set_value(color_counts_small[RED])
+        green_count.set_value(color_counts_small[GREEN])
+        blue_count.set_value(color_counts_small[BLUE])
         self.wait(1)
         
-        # Calculate percentages for small loop
-        total_small = len(small_loop_indices)
-        red_pct_small = color_counts_small[RED] / total_small * 100
-        blue_pct_small = color_counts_small[BLUE] / total_small * 100
-        green_pct_small = color_counts_small[GREEN] / total_small * 100
+        # Calculate average color for small loop
+        total_small = len(small_loop_order)
+        avg_color_small = [
+            color_counts_small[RED] / total_small,
+            color_counts_small[GREEN] / total_small,
+            color_counts_small[BLUE] / total_small
+        ]
         
-        result_small = VGroup(
-            Text(f"Red: {red_pct_small:.1f}%", font_size=18, color=RED),
-            Text(f"Blue: {blue_pct_small:.1f}%", font_size=18, color=BLUE),
-            Text(f"Green: {green_pct_small:.1f}%", font_size=18, color=GREEN)
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.1)
-        result_small.next_to(counter_box, DOWN, buff=0.3)
+        # Create average color circle for small loop
+        avg_circle_small = Circle(radius=0.4, fill_opacity=0.8, stroke_width=3, stroke_color=WHITE)
+        avg_circle_small.set_color(rgb_to_color(avg_color_small))
+        avg_circle_small.next_to(counter_box, DOWN, buff=0.5)
         
-        self.play(Write(result_small), run_time=1.5)
-        self.wait(1)
+        avg_label_small = Text("Average Color", font_size=18)
+        avg_label_small.next_to(avg_circle_small, DOWN, buff=0.2)
+        
+        self.play(Create(avg_circle_small), Write(avg_label_small), run_time=1.5)
+        self.wait(2)
         
         # Final explanation
         explanation = VGroup(
-            Text("Ergodic: Time average = Ensemble average", font_size=22, color=YELLOW),
-            Text("(Visits all accessible states uniformly)", font_size=18),
+            Text("Ergodic: Samples all colors uniformly", font_size=20, color=YELLOW),
+            Text("→ Mixed average color", font_size=18),
             Text("", font_size=14),
-            Text("Non-ergodic: Trapped in subset", font_size=22, color=ORANGE),
-            Text("(Cannot access full ensemble)", font_size=18)
+            Text("Non-ergodic: Trapped in subset", font_size=20, color=ORANGE),
+            Text("→ Only sees red", font_size=18)
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.2)
         explanation.to_edge(DOWN).shift(0.3*UP)
         
