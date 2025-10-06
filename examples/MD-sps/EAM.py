@@ -4,9 +4,6 @@ import numpy as np
 
 class EAM(Scene):
     """Embedded Atom Method visualization with 5x5 gold lattice."""
-    #Needs some work, vectors currently not updating. Could also flip the red arrows to better show repulsion.
-    #Maybe we can actually start with all of the different arrows and combine them into one repulsion arrow due to the cloud.
-    # Figure out how to get the arrows to update with the rest of the atom movement.
     
     def construct(self):
         # Lattice parameters
@@ -84,25 +81,14 @@ class EAM(Scene):
         # Add lattice
         self.add(title)
         self.play(
-            LaggedStart(*[FadeIn(cloud, scale=0.5) for cloud in electron_clouds], lag_ratio=0.03),
-            run_time=1.5
-        )
-        self.play(
             LaggedStart(*[GrowFromCenter(atom) for atom in atoms], lag_ratio=0.03),
             run_time=1.5
         )
-        
+        self.play(
+            LaggedStart(*[FadeIn(cloud, scale=0.5) for cloud in electron_clouds], lag_ratio=0.03),
+            run_time=1.5
+        )        
         self.wait(0.5)
-        
-        # Highlight the vacancy
-        vacancy_indicator = Circle(radius=cloud_radius * 1.2, color=WHITE, stroke_width=4)
-        vacancy_indicator.move_to(center_pos)
-        vacancy_label = Text("Vacancy", font_size=24, color=WHITE)
-        vacancy_label.next_to(vacancy_indicator, DOWN, buff=0.3)
-        
-        self.play(Create(vacancy_indicator), FadeIn(vacancy_label, shift=UP * 0.2))
-        self.wait(0.8)
-        self.play(FadeOut(vacancy_indicator), FadeOut(vacancy_label))
         
         # Show the missing atom above
         self.play(
@@ -117,6 +103,7 @@ class EAM(Scene):
         
         # Get the missing atom's current position
         missing_atom_pos = missing_atom.get_center()
+        initial_position = missing_atom_pos
         
         # Create force vectors pointing to/from the missing atom
         pair_potential_arrows = VGroup()
@@ -148,14 +135,14 @@ class EAM(Scene):
             # Electron cloud repulsion (repulsive) - from missing atom toward each lattice atom
             repulsion_direction = -direction_norm
             repulsion_length = 0.25 * distance_factor
-            repulsion_start = missing_atom_pos + repulsion_direction * (cloud_radius * 0.3)
-            repulsion_end = missing_atom_pos + repulsion_direction * (cloud_radius * 0.3 + repulsion_length)
+            repulsion_start = missing_atom_pos + repulsion_direction * (cloud_radius * 1.0)
+            repulsion_end = missing_atom_pos + repulsion_direction * (cloud_radius * 1.0 + repulsion_length)
             repulsion_arrow = Arrow(
                 start=repulsion_start,
                 end=repulsion_end,
                 color=electron_repulsion_color,
                 buff=0,
-                stroke_width=2.5 * distance_factor,
+                stroke_width=1, #2.5 * distance_factor,
                 max_tip_length_to_length_ratio=0.25
             )
             electron_repulsion_arrows.add(repulsion_arrow)
@@ -211,9 +198,17 @@ class EAM(Scene):
                     max_tip_length_to_length_ratio=0.2
                 )
                 mob[i].become(new_arrow)
+                # mob[i].put_start_and_end_on(new_start, new_end)
+                # mob[i].set_stroke(2.5*distance_factor)
         
         def update_repulsion_arrows(mob):
             missing_pos = missing_atom.get_center()
+            start_pos = initial_position  # Save this before animation
+            end_pos = center_pos
+            total_dist = np.linalg.norm(end_pos - start_pos)
+            current_dist = np.linalg.norm(missing_pos - start_pos)
+            progress = np.clip(current_dist / total_dist, 0, 1)
+            cloud_multiplier = 1.0 - 0.8 * progress
             
             for i, neighbor_pos in enumerate(neighbor_positions):
                 if i >= len(mob):
@@ -227,22 +222,25 @@ class EAM(Scene):
                 
                 # Scale arrow size by distance
                 distance_factor = np.clip(1.5 / (distance / spacing), 0.3, 1.0)
-                repulsion_length = 0.25 * distance_factor
+                repulsion_length = 0.5 * distance_factor
                 
                 # Update repulsive arrows (from missing atom to lattice atoms)
                 repulsion_direction = -direction_norm
-                new_start = missing_pos + repulsion_direction * (cloud_radius * 0.3)
-                new_end = missing_pos + repulsion_direction * (cloud_radius * 0.3 + repulsion_length)
+                new_start = missing_pos + repulsion_direction * (cloud_radius * cloud_multiplier)
+                new_end = missing_pos + repulsion_direction * (cloud_radius * cloud_multiplier + repulsion_length)
                 new_arrow = Arrow(
                     start=new_start,
                     end=new_end,
                     color=electron_repulsion_color,
-                    buff=0,
-                    stroke_width=2.5 * distance_factor,
+                    buff=0.0,
+                    stroke_width=1,  #2.5 * distance_factor,
                     max_tip_length_to_length_ratio=0.25
                 )
                 mob[i].become(new_arrow)
+                # mob[i].put_start_and_end_on(new_start, new_end)
+                # mob[i].set_stroke(2.5*distance_factor)
         
+        self.add(electron_repulsion_arrows, pair_potential_arrows)
         # Add updaters to arrow groups
         pair_potential_arrows.add_updater(update_pair_arrows)
         electron_repulsion_arrows.add_updater(update_repulsion_arrows)
@@ -251,13 +249,17 @@ class EAM(Scene):
         self.play(
             missing_atom.animate.move_to(center_pos),
             missing_cloud.animate.move_to(center_pos),
-            run_time=2.5,
-            rate_func=smooth
+            run_time=5,
+            rate_func=linear
         )
+        self.wait(2)
         
         # Remove updaters and fade out forces
         pair_potential_arrows.remove_updater(update_pair_arrows)
         electron_repulsion_arrows.remove_updater(update_repulsion_arrows)
+
+        self.wait(0.1)
+
         self.play(
             FadeOut(pair_potential_arrows),
             FadeOut(electron_repulsion_arrows),
@@ -270,12 +272,12 @@ class EAM(Scene):
         atoms.add(missing_atom)
         electron_clouds.add(missing_cloud)
         
-        # Show complete lattice
-        completion_text = Text("Complete Lattice", font_size=28, color=GREEN)
-        completion_text.to_edge(DOWN)
+        # # Show complete lattice
+        # completion_text = Text("Complete Lattice", font_size=28, color=GREEN)
+        # completion_text.to_edge(DOWN)
         
-        self.play(Write(completion_text))
-        self.wait(1)
+        # self.play(Write(completion_text))
+        # self.wait(0.1)
         
         # Pulse effect to show equilibrium
         self.play(
@@ -285,4 +287,4 @@ class EAM(Scene):
             run_time=1
         )
         
-        self.wait(2)
+        self.wait(0.1)

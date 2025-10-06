@@ -202,6 +202,7 @@ class RDF(Scene):
             grouped_vectors.add(group_vecs)
         
         # Rearrange vectors vertically on the left
+        # Sort the vectors from shortest to longest, left to right, where the fcc lattice was. make them straight up and down.
         self.play(
             distance_vectors.animate.arrange(DOWN, center=True, buff=0.2).shift(3.5*LEFT + 0.5*UP),
             run_time=1.5
@@ -282,8 +283,6 @@ class RDF(Scene):
         
         self.play(Write(explanation), run_time=1.5)
         self.wait(3)
-
-
 class LiquidRDF(Scene):
     def construct(self):
         # Title

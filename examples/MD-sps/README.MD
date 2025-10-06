@@ -1,3 +1,6 @@
+** manim -pql --disable_caching (scene) (scene-name)
+** manim --flush_cache
+
 These are all going to be scenes in an upcoming 5 minute video for SPScon.
 
 Need to concisely explain all research done in 5 minutes for a mid level undergraduate audience... will be a challenge.
@@ -43,3 +46,15 @@ using the velocity example can lead into the phase space of a single particle...
     What if we discretize all possible velocities of the particle, we get these 64 possible microstates. There are two loops here, something like a potential energy barrier  
     
     In our case we can get close to the larger system with a smaller representative system in a reasonable amount of time.
+
+First Draft
+    Scene 1 - Ready (GoldBarFracture)
+    Scene 2 - Ready (StressFracture) ... maybe rename to atomistic fracture?
+    Scene 3 - Ready (ParticlesInBox) ... might add hamiltonian eqs later?
+    Scene 4 - Ready (TwoParticlesMorse)
+    Scene 5 - Ready (EAM)
+    Scene 6 - Ready (MLPotential) ... can probably edit the cloud shapes a little more, but is good.
+    Scene 7 - ready (simulations - in media folder) these are just some straight ovito sims of what we did
+    Scene 8 - ready (RDF crystal) 
+    Scene 9 - ready (RDF Liquid)  ... i guess the old graph was actually a histogram aka completely accurate to what was shown... lol
+    Scene 10 - conclusion?
